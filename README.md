@@ -35,6 +35,7 @@ What do I wish was better about MLFlow?
   * so, solution 2 would be to query which-jobs-need-running from bash. I haven't yet found how to do this with mlflow.
   * solution 3 would be to use mlflow pipelines. These are experimental and complicated. I still find it easier to manage my own pipelines, e.g. by running `script1.sh` followed by `script2.sh`, rather than configuring yaml files.
 * the artifact and metrics logging are abstracted based on the assumed use-case that the mlflow tracking server will be on a different machine than the experiments. I wish there was an `mlflow-lite` API which knows that artifacts are stored in good-old-fashioned file paths. I don't want to have to "download" a file from `/data` to `/home` on the same machine. Not hard to get around with some wrappers, though, like [`nn_lib.utils.save_as_artifact`](https://github.com/bonsai-neuro-ai/nn-library/blob/main/src/nn_lib/utils/mlflow.py#L159)
+* despite artifact saving/loading being a little clunky, I've found it easier to store models myself by saving `model.state_dict()` as an artifact rather than using the `mlflow.pytorch.log_model()` interface.
 
 ### Things will fail. Modularize into short scripts.
 
