@@ -69,6 +69,26 @@ Bonus thoughts:
 
 ### Models
 
-### Logging
+It's worth investing time into learning how to write custom `nn.Module`s. The minimal examples are simple, and custom modules can be a great way to refactor into more readable code. This becomes even more true if you understand how torch introspects on its modules to discover parameters and submodules.
 
-### 
+My advice is just to not shy away from writing custom Modules. Find tutorials and experiment on your own.
+
+### Data
+
+Likewise, understanding a bit more about torch's `Dataset` and `DataLoader` abstractions can go a long way. Some simple best-practices:
+
+* Also don't shy away from writing a custom `Dataset`.
+* Rules for train/val/test splits:
+  * use training data to fit the model
+  * use validation data to tune hyperparameters, do early-stopping, etc.
+  * report final performance on test data that was never touched during training or hyperparameter search. (It's an unfortunately common error that people sometimes double-dip and re-use the same validation data for early-stopping or for hyperparameter search and for final performance, but that is technically a form of dataset leakage).
+* Many datasets have "train" and "val" splits but no explicit public "test" split. In these cases, best practice would be to take their "val" set and treat it as a "test" set locally, then use a `random_split` of their "train" set to get your own train/val splits.
+* If using `random_split`, use RNG with a manual seed, and save the seed as a parameter of the run(s). There is little reason to vary this seed parameter.
+* `DataLoader` efficiency can be a major speed bottleneck. Read the docs and learn about its parameters.
+  * Setting `num_workers>0` creates background threads for loading data. Contrary to what I used to think, more workers does not mean faster dataloaders. I'm now in the habit of setting `num_workers=4` or `5`
+  * Rule of thumb is to set `pin_memory=True` whenever `num_workers>0` and data will be moved to CUDA. Apparently this isn't a guaranteed speedup, but I've always seen mild gains when using it.
+  * Best-practices for `batch_size` is that it should be as big as possible without getting out-of-memory errors. Find this limit for a given project by (1) instantiating your biggest model and (2) trying bigger batch sizes until it fails a forward *and* backward pass (because gradients / backwards passes take additional memory)
+
+### The tuning playbook
+
+Lots of other advice on speeding things up and getting the most out of your models can be found on the [Google Resarch Tuning Playbook](https://github.com/google-research/tuning_playbook).
