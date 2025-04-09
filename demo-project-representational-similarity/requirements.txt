@@ -3,3 +3,5 @@ mlflow
 pandas
 seaborn
 torch
+torchvision
+
