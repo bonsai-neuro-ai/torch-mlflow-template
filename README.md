@@ -68,6 +68,10 @@ Bonus thoughts:
 - SLURM and other OS-level job schedulers are nice but then introduce even more overhead. I don't want to hire (or become) a sysadmin.
 - Docker/Podman/Kubernetes are another option that has come up and which I've used semi-successfully in the past. They come with their own overhead and learning curve and are not worth the trouble in my mind.
 
+### Use notebooks sparingly
+
+Notebooks are great for quick prototyping and exploration, but they can quickly become unwieldy and prone to bugs. Prototyping and sanity-checking in notebooks is fine. Actually running jobs should be refactored into scripts.
+
 ### Models
 
 It's worth investing time into learning how to write custom `nn.Module`s. The minimal examples are simple, and custom modules can be a great way to refactor into more readable code. This becomes even more true if you understand how torch introspects on its modules to discover parameters and submodules.
