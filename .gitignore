@@ -1,2 +1,7 @@
 .idea
+__pycache__
+*.pyc
+*.DS_Store
 
+# Create any local file with 'tmp' prefix and they'll be ignored.
+tmp*
