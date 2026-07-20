@@ -8,7 +8,7 @@ mlflow.set_tracking_uri("sqlite:////projects/demo-similarity/mlflow.db")
 results = search_runs_by_params(
     experiment_name="demo-similarity",
     finished_only=True,
-    params={"m": 1000, "comparator.class_path": "nn_lib.analysis.similarity.LinearCKA"},
+    params={"m": 1000, "comparator.method": "cka"},
 )
 assert len(results) > 0
 
