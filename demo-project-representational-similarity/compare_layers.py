@@ -2,10 +2,9 @@ import mlflow
 import torch
 from nn_lib.datasets import ImageNetDataModule
 from nn_lib.models import get_pretrained_model, GraphModulePlus
-from nn_lib.utils import search_runs_by_params
+from nn_lib.analysis.similarity import LinearCKA
+from nn_lib.utils import search_runs_by_params, log_params_and_config
 from torch.utils.data import Subset, DataLoader
-
-from comparators import Comparator
 
 
 def _get_test_data(dataset_name: str, seed: int, m: int):
@@ -31,19 +30,21 @@ def run_compare(
     modelB: str,
     layerB: str,
     dataset: str,
-    comparator: Comparator,
+    comparator: LinearCKA,
     m: int = 1000,
     data_seed: int = 189645,
     device: str | torch.device = "cuda",
 ):
     getterA = (
         GraphModulePlus.new_from_trace(get_pretrained_model(modelA))
+        .squash_all_conv_batchnorm_pairs()
         .set_output(layerA)
         .eval()
         .to(device)
     )
     getterB = (
         GraphModulePlus.new_from_trace(get_pretrained_model(modelB))
+        .squash_all_conv_batchnorm_pairs()
         .set_output(layerB)
         .eval()
         .to(device)
@@ -51,38 +52,14 @@ def run_compare(
 
     data = _get_test_data(dataset, data_seed, m)
 
-    repsA, repsB = [], []
-    with torch.no_grad():
-        for im, _ in data:
-            im = im.to(device)
-            repsA.append(getterA(im))
-            repsB.append(getterB(im))
+    @torch.no_grad()
+    def _iter_batches():
+        for batch, _ in data:
+            batch = batch.to(device, non_blocking=True)
+            yield getterA(batch), getterB(batch)
 
-    score = comparator.compare(
-        torch.cat(repsA, dim=0),
-        torch.cat(repsB, dim=0),
-    )
-
+    score = comparator.streaming_compare(_iter_batches)
     mlflow.log_metric("score", score.item())
-
-
-def _flatten_dict(d: dict, key_sep="_") -> dict:
-    """Flattens a nested dictionary."""
-    out = {}
-
-    def flatten(x: dict, name: str = ""):
-        if isinstance(x, dict):
-            for a in x:
-                flatten(x[a], name + a + key_sep)
-        else:
-            if name[:-1] in out:
-                raise ValueError(
-                    f"Duplicate key created during flattening: {name[:-1]}"
-                )
-            out[name[:-1]] = x
-
-    flatten(d)
-    return out
 
 
 if __name__ == "__main__":
@@ -90,26 +67,34 @@ if __name__ == "__main__":
 
     parser = jsonargparse.ArgumentParser()
     parser.add_function_arguments(run_compare)
+    parser.add_argument("--config", action="config")
+    parser.add_argument(
+        "--mlflow_tracking_uri", default="sqlite:////projects/demo-similarity/mlflow.db"
+    )
+    parser.add_argument("--mlflow_experiment", default="debug")
     args = parser.parse_args()
+    args.pop("config")
 
-    # Set up MLflow
-    mlflow.set_tracking_uri("/data/projects/demo-similarity/mlruns")
-    mlflow.set_experiment("demo-similarity")
+    # Set up MLflow. The '/projects/your-project-name/mlflow.db' path is the recommended place to
+    # put your work on the shared lab server.
+    mlflow.set_tracking_uri(args.pop("mlflow_tracking_uri"))
+    mlflow.set_experiment(args.pop("mlflow_experiment"))
 
-    # Check if a run with the same parameters already exists, and remove 'force_recompute' from args
-    # to avoid it being considered as a parameter below
+    # Check if a run with the same parameters already exists. If so, exit early to avoid
+    # duplication. NOTE: if run on a cluster, this is maybe a bad pattern because we need to wait
+    # for the job to be scheduled and run before we are even able to check if it needs running. A
+    # to-do item is to write a demo where the 'exit-early' pattern happens before the job is
+    # submitted.
     existing_runs = search_runs_by_params(
-        "demo-similarity",
-        finished_only=True,
-        params=_flatten_dict(args.as_dict()),
-        skip_fields={"device": ...},
+        params=args, finished_only=True, skip_keys=["device"]
     )
     if not existing_runs.empty:
         print("Run already exists with these params. Skipping.")
         exit(0)
 
     # Start the run and log params
-    args_instantiated = parser.instantiate_classes(args)
+    args_instantiated = parser.instantiate(args)
     with mlflow.start_run() as run:
-        mlflow.log_params(_flatten_dict(args.as_dict()))
+        mlflow.log_text(parser.dump(args), "config.yaml")
+        log_params_and_config(args, parser)
         run_compare(**args_instantiated.as_dict())

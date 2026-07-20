@@ -3,13 +3,14 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from nn_lib.utils import search_runs_by_params
 
-mlflow.set_tracking_uri("/data/projects/demo-similarity/mlruns")
+mlflow.set_tracking_uri("sqlite:////projects/demo-similarity/mlflow.db")
 
 results = search_runs_by_params(
     experiment_name="demo-similarity",
     finished_only=True,
-    params={"m": 1000, "comparator_class_path": "comparators.LinearCKA"},
+    params={"m": 1000, "comparator.class_path": "nn_lib.analysis.similarity.LinearCKA"},
 )
+assert len(results) > 0
 
 # %%
 
