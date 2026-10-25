@@ -1,7 +1,8 @@
+#bonsai-nn-library>=0.7.0
+git+https://github.com/bonsai-neuro-ai/nn-library@run-registry
 jsonargparse
 mlflow
 pandas
 seaborn
 torch
 torchvision
-

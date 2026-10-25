@@ -18,11 +18,10 @@ for MODELA in "${MODELS[@]}"; do
       for LAYERB in "${LAYERSB[@]}"; do
         echo "Running CKA for $MODELA layer $LAYERA and $MODELB layer $LAYERB"
         python -m compare_layers \
-          --comparator="comparators.LinearCKA" \
+          --comparator.method="cka" \
+          --comparator.estimator="SONG2007" \
           --modelA="$MODELA" \
           --modelB="$MODELB" \
-          --layerA="$LAYERA" \
-          --layerB="$LAYERB" \
           --dataset="imagenet" \
           --m=1000
       done

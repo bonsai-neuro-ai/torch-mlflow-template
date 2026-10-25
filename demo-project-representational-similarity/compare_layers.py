@@ -1,9 +1,13 @@
+import itertools
+from dataclasses import dataclass
+from typing import Optional, Literal
+
 import mlflow
 import torch
 from nn_lib.datasets import ImageNetDataModule
 from nn_lib.models import get_pretrained_model, GraphModulePlus
-from nn_lib.analysis.similarity import LinearCKA
-from nn_lib.utils import search_runs_by_params, log_params_and_config
+from nn_lib.analysis.similarity import LinearCKA, HSICEstimator
+from nn_lib.utils import RunIndex, logged_run
 from torch.utils.data import Subset, DataLoader
 
 
@@ -24,49 +28,101 @@ def _get_test_data(dataset_name: str, seed: int, m: int):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 
-def run_compare(
+def _get_model(model_name: str):
+    return GraphModulePlus.new_from_trace(
+        get_pretrained_model(model_name)
+    ).squash_all_conv_batchnorm_pairs()
+
+
+@torch.no_grad()
+def _get_reps_iter(
+    dl: DataLoader,
+    getterA: GraphModulePlus,
+    getterB: GraphModulePlus,
+    device: str | torch.device,
+):
+    for batch, _ in dl:
+        batch = batch.to(device, non_blocking=True)
+        yield getterA(batch), getterB(batch)
+
+
+@dataclass
+class ComparatorSpec:
+    method: Literal["cka"] = "cka"  # to be extended another time
+    estimator: HSICEstimator = HSICEstimator.CHUN2025
+
+    def get_comparator(self):
+        if self.method == "cka":
+            return LinearCKA(estimator=self.estimator)
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+
+def main(
     modelA: str,
-    layerA: str,
     modelB: str,
-    layerB: str,
     dataset: str,
-    comparator: LinearCKA,
+    comparator: ComparatorSpec,
     m: int = 1000,
     data_seed: int = 189645,
     device: str | torch.device = "cuda",
+    layerA: Optional[str] = None,
+    layerB: Optional[str] = None,
 ):
-    getterA = (
-        GraphModulePlus.new_from_trace(get_pretrained_model(modelA))
-        .squash_all_conv_batchnorm_pairs()
-        .set_output(layerA)
-        .eval()
-        .to(device)
-    )
-    getterB = (
-        GraphModulePlus.new_from_trace(get_pretrained_model(modelB))
-        .squash_all_conv_batchnorm_pairs()
-        .set_output(layerB)
-        .eval()
-        .to(device)
-    )
+    if layerA is None:
+        layersA = [
+            str(node) for node in _get_model(modelA).graph.nodes if "add" in str(node)
+        ]
+    else:
+        layersA = [layerA]
+    if layerB is None:
+        layersB = [
+            str(node) for node in _get_model(modelB).graph.nodes if "add" in str(node)
+        ]
+    else:
+        layersB = [layerB]
 
+    comparator_instance = comparator.get_comparator()
+
+    # We only need to instantiate the dataloader once; iterating over it once per job will re-use
+    # the same data for all jobs. This is not *generally* true of shuffled dataloaders, but
+    # _get_test_data uses a Subset of specifically the same indices over and over.
     data = _get_test_data(dataset, data_seed, m)
 
-    @torch.no_grad()
-    def _iter_batches():
-        for batch, _ in data:
-            batch = batch.to(device, non_blocking=True)
-            yield getterA(batch), getterB(batch)
-
-    score = comparator.streaming_compare(_iter_batches)
-    mlflow.log_metric("score", score.item())
+    jobs = [
+        {
+            "modelA": modelA,
+            "layerA": lA,
+            "modelB": modelB,
+            "layerB": lB,
+            "dataset": dataset,
+            "comparator": comparator,
+            "m": m,
+            "data_seed": data_seed,
+        }
+        for lA, lB in itertools.product(layersA, layersB)
+    ]
+    index = RunIndex.from_experiment(jobs[0])
+    for job in index.pending(jobs):
+        print("Running", job)
+        with logged_run(job):
+            getterA = (
+                _get_model(job["modelA"]).set_output(job["layerA"]).eval().to(device)
+            )
+            getterB = (
+                _get_model(job["modelB"]).set_output(job["layerB"]).eval().to(device)
+            )
+            score = comparator_instance.streaming_compare(
+                lambda: _get_reps_iter(data, getterA, getterB, device)
+            )
+            mlflow.log_metric("score", score.item())
 
 
 if __name__ == "__main__":
     import jsonargparse
 
     parser = jsonargparse.ArgumentParser()
-    parser.add_function_arguments(run_compare)
+    parser.add_function_arguments(main)
     parser.add_argument("--config", action="config")
     parser.add_argument(
         "--mlflow_tracking_uri", default="sqlite:////projects/demo-similarity/mlflow.db"
@@ -80,21 +136,4 @@ if __name__ == "__main__":
     mlflow.set_tracking_uri(args.pop("mlflow_tracking_uri"))
     mlflow.set_experiment(args.pop("mlflow_experiment"))
 
-    # Check if a run with the same parameters already exists. If so, exit early to avoid
-    # duplication. NOTE: if run on a cluster, this is maybe a bad pattern because we need to wait
-    # for the job to be scheduled and run before we are even able to check if it needs running. A
-    # to-do item is to write a demo where the 'exit-early' pattern happens before the job is
-    # submitted.
-    existing_runs = search_runs_by_params(
-        params=args, finished_only=True, skip_keys=["device"]
-    )
-    if not existing_runs.empty:
-        print("Run already exists with these params. Skipping.")
-        exit(0)
-
-    # Start the run and log params
-    args_instantiated = parser.instantiate(args)
-    with mlflow.start_run() as run:
-        mlflow.log_text(parser.dump(args), "config.yaml")
-        log_params_and_config(args, parser)
-        run_compare(**args_instantiated.as_dict())
+    main(**vars(parser.instantiate(args)))
