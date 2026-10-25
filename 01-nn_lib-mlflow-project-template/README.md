@@ -78,3 +78,21 @@ if __name__ == "__main__":
     with mlflow.start_run():
         main()
 ```
+
+## Hosting MLFlow UI to see logged data
+
+For example, if your tracking URI was `sqlite:////projects/myproject/mlflow.db`, you can host the UI with the following command in the terminal:
+
+```bash
+mlflow server --backend-store-uri sqlite:////projects/myproject/mlflow.db --host 0.0.0.0 --port 5005
+```
+
+The `--backend-store-uri` option is used to provide the reference to the database, the `--host` flag is the IP address for the UI server (setting this to `0.0.0.0` allows you to pull up the UI in your local machine using `localhost` thanks to SSH port forwarding), and the `--port` flag specifies the port for the UI application. Now you can open up the UI via `localhost:5005` in a browser in your local machine.
+
+For this command to work, you need to make sure that `mlflow` is installed either globally or in an active virtual environment. If using `uv`, you can install `mlflow` globally via this command:
+
+```bash
+uv tool install mlflow --with pymysql
+```
+
+Note that the `--with` flag here installs any other libraries required with your tool. For instance, if your database is a `mysql` database instead of `sqlite`, you would need `pymysql` too. 
