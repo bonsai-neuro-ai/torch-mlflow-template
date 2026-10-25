@@ -84,10 +84,16 @@ if __name__ == "__main__":
 For example, if your tracking URI was `sqlite:////projects/myproject/mlflow.db`, you can host the UI with the following command in the terminal:
 
 ```bash
-mlflow server --backend-store-uri sqlite:////projects/myproject/mlflow.db --host 0.0.0.0 --port 5005
+mlflow server --backend-store-uri sqlite:////projects/myproject/mlflow.db --host 127.0.0.1 --port 5005
 ```
 
-The `--backend-store-uri` option is used to provide the reference to the database, the `--host` flag is the IP address for the UI server (setting this to `0.0.0.0` allows you to pull up the UI in your local machine using `localhost` thanks to SSH port forwarding), and the `--port` flag specifies the port for the UI application. Now you can open up the UI via `localhost:5005` in a browser in your local machine.
+The `--backend-store-uri` option is used to provide the reference to the database, the `--host` flag is the IP address for the UI server (setting this to `127.0.0.1` allows you to access the UI server via `localhost`), and the `--port` flag specifies the port for the UI application. Now you can open up the UI via `localhost:5005` in a browser in your local machine **but** with a caveat of setting up SSH port forwarding via the following command in your local machine:
+
+```bash
+ssh -L 5005:127.0.0.1:5005 user@lab_server_ip
+```
+
+SSH port forwarding essentially creates a secure path from `localhost:5005` in your local machine to `localhost:5005` in the lab server. If you connected to the lab server via VSCode and run the `mlflow server ...` command in the VSCode terminal, it automatically handles port forwarding for you. 
 
 For this command to work, you need to make sure that `mlflow` is installed either globally or in an active virtual environment. If using `uv`, you can install `mlflow` globally via this command:
 
