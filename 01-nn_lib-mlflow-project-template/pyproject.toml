@@ -1,0 +1,27 @@
+[project]
+name = "NNLibMLFlowProjectTemplate"
+version = "0.1.0"
+description = "Your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "bonsai-nn-library>=0.7.0",
+    "jsonargparse",
+    # "pymysql", # Uncomment and use this if using SQL rather than SQLite for MLFlow tracking server
+    # NOTE that these might be considered 'optional-dependencies' but Pycharm+uv doesn't seem to support that, so we just include them here for now
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+
+# --- Below, setting a 'build-system' and 'setuptools.packages' makes it so that modules and files
+#     in the 'src' directory are included importable from anywhere in the project ---
+
+[build-system]
+requires = ["setuptools>=78.1.0", "wheel>=0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
