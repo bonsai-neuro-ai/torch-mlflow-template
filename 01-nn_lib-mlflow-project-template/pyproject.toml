@@ -2,9 +2,9 @@
 name = "NNLibMLFlowProjectTemplate"
 version = "0.1.0"
 description = "Your description here"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
-    "bonsai-nn-library>=0.7.0",
+    "bonsai-nn-library>=0.7.2",
     "jsonargparse",
     # "pymysql", # Uncomment and use this if using SQL rather than SQLite for MLFlow tracking server
     # NOTE that these might be considered 'optional-dependencies' but Pycharm+uv doesn't seem to support that, so we just include them here for now
